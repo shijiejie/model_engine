@@ -1,0 +1,22 @@
+# ndk-build output (repo root only)
+/libs/
+/obj/
+/dist/
+
+# cmake output and ad-hoc scratch (repo root only)
+/build*/
+
+# confidential MediaTek material - not redistributed
+third_party/mtk/
+
+# binaries and objects
+*.o
+*.obj
+*.a
+*.so
+*.zip
+# ...but keep the prebuilt TFLite distribution runtime libs
+!third_party/tflite-dist/libs/android/*/*.so
+
+# machine-local paths written by build_android.bat /sdk
+scripts/local_paths.bat
