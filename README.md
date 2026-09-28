@@ -156,14 +156,18 @@ your own TFLite with `-DMIE_TFLITE_INCLUDE_DIRS=` / `-DMIE_TFLITE_LIBRARIES=` /
 
 ## Measured on a real device
 
-A Qualcomm device, Android 16, arm64-v8a. `add.bin` is a 544-byte toy;
-`detect.tflite` is a real 4.2 MB SSD-MobileNet.
+A Qualcomm device, Android 16, arm64-v8a. `add.bin` is a 544-byte toy and
+`multi_add.bin` a 4-input / 2-output toy; `detect.tflite` is a real 4.2 MB
+SSD-MobileNet.
 
 | model | backend | nodes delegated | init | per inference |
 |-------|---------|-----------------|------|---------------|
 | `add.bin` | `cpu` | – | 0.9 ms | 0.4 us |
 | `add.bin` | `gpu` | 2/2 | 263 ms | 294 us |
 | `add.bin` | `qnn` | 2/2 | 285 ms | 337 us |
+| `multi_add.bin` | `cpu` | – | 7.8 ms | 0.9 us |
+| `multi_add.bin` | `gpu` | 3/3 | 408 ms | 911 us |
+| `multi_add.bin` | `qnn` | 3/3 | 712 ms | 918 us |
 | `detect.tflite` | `cpu` | – | 2.3 ms | 6.05 ms |
 | `detect.tflite` | `gpu` cold | partial | 1187.0 ms | 9.68 ms |
 | `detect.tflite` | `gpu` **warm cache** | partial | **160.5 ms** | 11.51 ms |
@@ -177,6 +181,10 @@ A Qualcomm device, Android 16, arm64-v8a. `add.bin` is a 544-byte toy;
 * **The cache pays for itself**: GPU init drops 1187 ms → 160.5 ms (7.4×) on the
   real model; QNN 440.6 ms → 124.8 ms (3.5×). The log tells you which happened —
   GPU flips to `Initialized OpenCL-based API from serialized data.`
+* `multi_add.bin` (4 inputs, 2 outputs) is the cross-backend consistency
+  benchmark: both outputs are byte-identical across `cpu`/`gpu`/`qnn`/
+  `qnnnative` (FNV-1a checksum `5cba39c5` each), which exercises the multi-input
+  → multi-output tensor mapping on every path.
 
 A MediaTek device (Android 16). `dla` numbers
 are the same models compiled with `ncc-tflite --arch=mdla3.0` on the device,
