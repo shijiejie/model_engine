@@ -135,6 +135,13 @@ namespace opt {
 // official Android AAR).
 constexpr char kXnnpack[] = "xnnpack";
 
+// ---- Shared across backends ----------------------------------------------
+// "true" | "false" -> allow fp16 instead of fp32. Read by kGpu
+// (is_precision_loss_allowed) and kMtk (setAllowFp16PrecisionForFp32). QNN
+// does NOT read this key — the HTP already runs fp16 by default (see
+// kHtpPrecision).
+constexpr char kAllowFp16[] = "allow_fp16";
+
 // ---- Qualcomm QNN (libQnnTFLiteDelegate.so) -----------------------------
 // Selects the accelerator. "htp" is the NPU and is the kQnn default.
 constexpr char kBackendType[] = "backend_type";
@@ -181,8 +188,6 @@ constexpr char kQnnGraphName[] = "qnn_graph_name";
 constexpr char kExecutionPreference[] = "execution_preference";
 // Numeric -> setExecutionPriority. Higher is more important.
 constexpr char kExecutionPriority[] = "execution_priority";
-// "true" | "false" -> setAllowFp16PrecisionForFp32
-constexpr char kAllowFp16[] = "allow_fp16";
 // Vendor accelerator id -> setAcceleratorName. On MediaTek parts the NPU is the
 // "mdla" device (e.g. "mtk-mdla"). Recommended: without it, layer verification
 // for some graphs reaches the vendor's ArmNN/OpenCL path, which aborts the
