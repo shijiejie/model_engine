@@ -4,6 +4,7 @@
 
 #include "src/delegate_handle.h"
 #include "src/fingerprint.h"
+#include "src/options.h"
 #include "src/tflite_interpreter.h"
 
 #if MIE_ENABLE_GPU
@@ -24,9 +25,24 @@ std::unique_ptr<Engine> BuildGpu(const Config& cfg, const ModelSource& model,
   return nullptr;
 #else
   TfLiteGpuDelegateOptionsV2 opts = TfLiteGpuDelegateOptionsV2Default();
-  // An engine is built once and invoked many times: favour steady-state
-  // throughput over one-shot latency.
-  opts.inference_preference = TFLITE_GPU_INFERENCE_PREFERENCE_SUSTAINED_SPEED;
+  // Keep the Default() inference_preference (FAST_SINGLE_ANSWER). Forcing
+  // SUSTAINED_SPEED made the Mali OpenCL compiler search far more kernel
+  // strategies: first-run compile went from a few seconds to 40s+ on one
+  // mid-range MediaTek SoC, which stalled the HAL capture thread long enough
+  // for the vendor watchdog to ptrace-freeze the whole camera HAL server. The
+  // legacy ModelInit ran with Default() and its GPU effect/throughput was
+  // validated in mass production.
+  //
+
+  // Caller opt-in fp16 codegen ("true"/"1"). Off by default: fp16 trades a bit
+  // of accuracy for much faster shader compilation and inference. Compiling
+  // large fp32 graphs can block in clWaitForEvents for minutes on some Mali
+  // drivers (observed on one mid-range MediaTek SoC), so integrations that hit
+  // that should pass allow_fp16=true the way the legacy ModelInit did with
+  // is_precision_loss_allowed=true.
+  if (const std::string* fp16 = FindOption(cfg.options, mie::opt::kAllowFp16)) {
+    opts.is_precision_loss_allowed = IsTruthy(*fp16);
+  }
 
   // TfLiteGpuDelegateV2Create copies both strings, so these only have to
   // outlive this function.
