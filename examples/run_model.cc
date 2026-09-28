@@ -21,6 +21,7 @@ mie::Backend ParseBackend(const char* name) {
   if (s == "qnn") return mie::Backend::kQnn;
   if (s == "mtk") return mie::Backend::kMtk;
   if (s == "dla" || s == "mtk-dla") return mie::Backend::kMtkDla;
+  if (s == "qnnnative" || s == "qnn-native") return mie::Backend::kQnnNative;
   return mie::Backend::kCpu;
 }
 
@@ -129,8 +130,8 @@ bool ReadWholeFile(const char* path, std::vector<char>* out) {
 int main(int argc, char** argv) {
   if (argc < 2) {
     std::fprintf(stderr,
-                 "usage: %s model.tflite [cpu|gpu|qnn|mtk|dla] [cache_dir] [runs] [threads]\n"
-                 "  (dla takes a precompiled .dla instead of a .tflite)\n"
+                 "usage: %s model.tflite [cpu|gpu|qnn|mtk|dla|qnnnative] [cache_dir] [runs] [threads]\n"
+                 "  (dla takes a precompiled .dla; qnnnative takes a QNN context .bin)\n"
                  "  env MIE_MODEL_BUFFER=1   pass the model as an in-memory "
                  "buffer instead of a path\n"
                  "  env MIE_OPTIONS=k=v,...  extra backend options\n",

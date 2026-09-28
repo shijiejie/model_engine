@@ -1,15 +1,17 @@
-// Minimal, zero-copy inference engine.
+// Minimal inference engine.
 //
-// One abstraction, five backends, one implementation file each:
-//   kCpu     -> TFLite built-in kernels (multi-threaded XNNPACK)
-//   kGpu     -> TFLite GPU delegate (OpenCL/OpenGL), serialized model cache
-//   kQnn     -> Qualcomm QNN (AI Engine Direct) HTP/NPU, via the delegate plugin ABI
-//   kMtk     -> MediaTek NeuroPilot, via the NeuroPilotTFLiteShim runtime
-//   kMtkDla  -> MediaTek DLA, a precompiled .dla via the Neuron Runtime
+// One abstraction, six backends, one implementation file each:
+//   kCpu       -> TFLite built-in kernels (multi-threaded XNNPACK)
+//   kGpu       -> TFLite GPU delegate (OpenCL/OpenGL), serialized model cache
+//   kQnn       -> Qualcomm QNN (AI Engine Direct) HTP/NPU, via the delegate plugin ABI
+//   kQnnNative -> Qualcomm QNN HTP/NPU, a precompiled context binary via the native C API
+//   kMtk       -> MediaTek NeuroPilot, via the NeuroPilotTFLiteShim runtime
+//   kMtkDla    -> MediaTek DLA, a precompiled .dla via the Neuron Runtime
 //
 // CPU/GPU/QNN are all "one TFLite interpreter plus an optional delegate", so
-// they share src/tflite_interpreter. MTK is a different runtime that is not a
-// TFLite delegate at all, so it is a self-contained Engine implementation.
+// they share src/tflite_interpreter. kQnnNative/kMtk/kMtkDla are different
+// runtimes that are not TFLite delegates at all, so each is a self-contained
+// Engine implementation.
 //
 // Write into Input(i).data, call Run(), read Output(i).data. That is genuinely
 // zero-copy on CPU/GPU/QNN. MTK's runtime only takes copied buffers, so there
@@ -59,20 +61,22 @@ struct Tensor {
 
 enum class Backend : int {
   kCpu = 0,
-  kGpu,    // TFLite GPU delegate
-  kQnn,    // Qualcomm NPU
-  kMtk,    // MediaTek NPU, .tflite through the device's NeuroPilot delegate
-  kMtkDla, // MediaTek NPU, precompiled .dla through the Neuron Runtime
+  kGpu,       // TFLite GPU delegate
+  kQnn,       // Qualcomm NPU, .tflite through the TFLite delegate plugin ABI
+  kMtk,       // MediaTek NPU, .tflite through the device's NeuroPilot delegate
+  kMtkDla,    // MediaTek NPU, precompiled .dla through the Neuron Runtime
+  kQnnNative, // Qualcomm NPU, precompiled context binary through the native C API
 };
 
 struct Config {
   // ---- Model source: set a path OR a buffer ----------------------------
   // Path to a model file: a .tflite for kCpu/kGpu/kQnn/kMtk, a .dla produced
-  // by the NeuroPilot SDK's `ncc-tflite` for kMtkDla. Ignored when a buffer is
-  // supplied.
+  // by the NeuroPilot SDK's `ncc-tflite` for kMtkDla, and a QNN context
+  // binary (.bin) produced by qnn-context-binary-generator for kQnnNative.
+  // Ignored when a buffer is supplied.
   std::string model_path;
 
-  // In-memory .tflite model.
+  // In-memory model (.tflite, or a QNN context binary for kQnnNative).
   //
   // NON-OWNING, and this is the important part: the bytes are handed straight
   // to the runtime, which may keep a pointer into them rather than copying.
@@ -150,6 +154,17 @@ constexpr char kDeviceId[] = "device_id";  // multi-HTP SoCs
 // delegate application failure". Leave it unset unless you need it.
 constexpr char kLibraryPath[] = "library_path";
 constexpr char kLogLevel[] = "log_level";  // numeric, QNN verbosity
+
+// ---- Qualcomm QNN native C API (kQnnNative) -----------------------------
+// Shared-library name or absolute path for the QNN HTP backend, default
+// "libQnnHtp.so". dlopen'd at run time, so nothing is linked.
+constexpr char kQnnNativeLibrary[] = "qnn_native_library";
+// Shared-library name or absolute path for the QNN System library used to
+// introspect the context binary, default "libQnnSystem.so".
+constexpr char kQnnSystemLibrary[] = "qnn_system_library";
+// Name of the graph to run when the context binary holds several; empty (the
+// default) selects the first graph.
+constexpr char kQnnGraphName[] = "qnn_graph_name";
 
 // ---- MediaTek NeuroPilot (NeuroPilotTFLiteShim.h) -----------------------
 // These map onto the shim's ANeuralNetworksTFLiteOptions_set* calls.

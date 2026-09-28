@@ -16,12 +16,16 @@
 #   MIE_ENABLE_GPU=0|1        GPU backend              (default 1)
 #   MIE_ENABLE_MTK=0|1        MediaTek backend         (default 0)
 #   MIE_ENABLE_MTK_DLA=0|1    MediaTek DLA backend     (default 0)
+#   MIE_ENABLE_QNN_NATIVE=0|1 Qualcomm QNN native backend (default 0)
 #   MIE_BUILD_EXAMPLE=0|1     build the mie_run driver (default 1)
 #   MIE_MTK_INCLUDE_DIR=<dir> directory holding NeuroPilotTFLiteShim.h,
 #                             required when MIE_ENABLE_MTK=1
 #   MIE_MTK_SDK_INCLUDE_DIR=<dir>
 #                             directory holding neuron/api/RuntimeAPI.h,
 #                             required when MIE_ENABLE_MTK_DLA=1
+#   MIE_QNN_SDK_INCLUDE_DIR=<dir>
+#                             directory holding QnnInterface.h,
+#                             required when MIE_ENABLE_QNN_NATIVE=1
 #   MIE_TFLITE_ROOT=<dir>     overrides third_party/tflite-dist
 #
 # MIE_ENABLE_MTK=1 also needs APP_PLATFORM >= android-27, because
@@ -39,10 +43,12 @@ LOCAL_PATH := $(MIE_ROOT)
 MIE_ENABLE_GPU      ?= 1
 MIE_ENABLE_MTK      ?= 0
 MIE_ENABLE_MTK_DLA  ?= 0
+MIE_ENABLE_QNN_NATIVE ?= 0
 MIE_BUILD_EXAMPLE   ?= 1
 MIE_TFLITE_ROOT     ?= $(MIE_ROOT)/third_party/tflite-dist
 MIE_MTK_INCLUDE_DIR ?=
 MIE_MTK_SDK_INCLUDE_DIR ?=
+MIE_QNN_SDK_INCLUDE_DIR ?=
 
 MIE_SRC_FILES := \
     src/engine.cc \
@@ -53,6 +59,7 @@ MIE_SRC_FILES := \
     src/backend_cpu.cc \
     src/backend_gpu.cc \
     src/backend_qnn.cc \
+    src/backend_qnn_native.cc \
     src/backend_mtk.cc \
     src/backend_mtk_dla.cc
 
@@ -89,6 +96,7 @@ LOCAL_C_INCLUDES := $(MIE_ROOT)/include $(MIE_ROOT)
 LOCAL_CPPFLAGS := -std=c++11 -Wall -Wextra
 LOCAL_CFLAGS := -DMIE_ENABLE_GPU=$(MIE_ENABLE_GPU) -DMIE_ENABLE_MTK=$(MIE_ENABLE_MTK)
 LOCAL_CFLAGS += -DMIE_ENABLE_MTK_DLA=$(MIE_ENABLE_MTK_DLA)
+LOCAL_CFLAGS += -DMIE_ENABLE_QNN_NATIVE=$(MIE_ENABLE_QNN_NATIVE)
 
 ifeq ($(MIE_ENABLE_MTK),1)
 ifeq ($(MIE_MTK_INCLUDE_DIR),)
@@ -102,6 +110,13 @@ ifeq ($(MIE_MTK_SDK_INCLUDE_DIR),)
 $(error MIE_ENABLE_MTK_DLA=1 requires MIE_MTK_SDK_INCLUDE_DIR=<dir holding neuron/api/RuntimeV2.h>)
 endif
 LOCAL_C_INCLUDES += $(MIE_MTK_SDK_INCLUDE_DIR)
+endif
+
+ifeq ($(MIE_ENABLE_QNN_NATIVE),1)
+ifeq ($(MIE_QNN_SDK_INCLUDE_DIR),)
+$(error MIE_ENABLE_QNN_NATIVE=1 requires MIE_QNN_SDK_INCLUDE_DIR=<dir holding QnnInterface.h>)
+endif
+LOCAL_C_INCLUDES += $(MIE_QNN_SDK_INCLUDE_DIR)
 endif
 
 # Recorded for consumers; a static library links nothing by itself.
@@ -124,6 +139,7 @@ LOCAL_C_INCLUDES := $(MIE_ROOT)/include
 LOCAL_CPPFLAGS := -std=c++11 -Wall -Wextra
 LOCAL_CFLAGS := -DMIE_ENABLE_GPU=$(MIE_ENABLE_GPU) -DMIE_ENABLE_MTK=$(MIE_ENABLE_MTK)
 LOCAL_CFLAGS += -DMIE_ENABLE_MTK_DLA=$(MIE_ENABLE_MTK_DLA)
+LOCAL_CFLAGS += -DMIE_ENABLE_QNN_NATIVE=$(MIE_ENABLE_QNN_NATIVE)
 LOCAL_STATIC_LIBRARIES := mie
 LOCAL_SHARED_LIBRARIES := tensorflowlite_c tensorflowlite_gpu_delegate
 LOCAL_LDLIBS := -llog -ldl -lEGL -lGLESv3

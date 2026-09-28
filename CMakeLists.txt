@@ -15,6 +15,7 @@ find_package(Threads REQUIRED)
 option(MIE_ENABLE_GPU "Build the TFLite GPU backend" ON)
 option(MIE_ENABLE_MTK "Build the MediaTek NeuroPilot backend" OFF)
 option(MIE_ENABLE_MTK_DLA "Build the MediaTek DLA (Neuron Runtime) backend" OFF)
+option(MIE_ENABLE_QNN_NATIVE "Build the Qualcomm QNN native C API backend" OFF)
 option(MIE_BUILD_EXAMPLES "Build the examples" ON)
 
 # ---------------------------------------------------------------------------
@@ -66,6 +67,7 @@ add_library(mie STATIC
   src/backend_cpu.cc
   src/backend_gpu.cc
   src/backend_qnn.cc
+  src/backend_qnn_native.cc
   src/backend_mtk.cc
   src/backend_mtk_dla.cc
 )
@@ -156,7 +158,27 @@ else()
   target_compile_definitions(mie PRIVATE MIE_ENABLE_MTK_DLA=0)
 endif()
 
-# QNN is dlopen'd, so it needs nothing at build time.
+if(MIE_ENABLE_QNN_NATIVE)
+  set(MIE_QNN_SDK_INCLUDE_DIR "" CACHE STRING
+      "Directory holding QnnInterface.h (from the Qualcomm QNN SDK)")
+  target_compile_definitions(mie PRIVATE MIE_ENABLE_QNN_NATIVE=1)
+
+  # libQnnHtp.so and libQnnSystem.so are dlopen'd at run time, so nothing is
+  # linked here — the include directory is only needed for the C API
+  # declarations.
+  if(NOT MIE_QNN_SDK_INCLUDE_DIR)
+    message(FATAL_ERROR
+      "MIE_ENABLE_QNN_NATIVE=ON needs -DMIE_QNN_SDK_INCLUDE_DIR=<the QNN SDK "
+      "include dir, e.g. <sdk>/include/QNN holding QnnInterface.h and "
+      "System/QnnSystemContext.h>. Those headers are confidential Qualcomm "
+      "material, so they are not fetched automatically.")
+  endif()
+  target_include_directories(mie SYSTEM PRIVATE ${MIE_QNN_SDK_INCLUDE_DIR})
+else()
+  target_compile_definitions(mie PRIVATE MIE_ENABLE_QNN_NATIVE=0)
+endif()
+
+# QNN (delegate) is dlopen'd, so it needs nothing at build time.
 if(ANDROID)
   target_link_libraries(mie PUBLIC log)
 endif()

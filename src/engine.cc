@@ -8,6 +8,7 @@
 #include "src/backend_mtk.h"
 #include "src/backend_mtk_dla.h"
 #include "src/backend_qnn.h"
+#include "src/backend_qnn_native.h"
 #include "src/log.h"
 #include "src/model_source.h"
 
@@ -26,6 +27,8 @@ const char* BackendName(Backend backend) {
       return "kMtk";
     case Backend::kMtkDla:
       return "kMtkDla";
+    case Backend::kQnnNative:
+      return "kQnnNative";
   }
   return "unknown";
 }
@@ -64,6 +67,8 @@ std::unique_ptr<Engine> Engine::Create(const Config& config,
       return internal::BuildMtk(config, model, error);
     case Backend::kMtkDla:
       return internal::BuildMtkDla(config, model, error);
+    case Backend::kQnnNative:
+      return internal::BuildQnnNative(config, model, error);
   }
   if (error != nullptr) *error = "unknown backend";
   return nullptr;

@@ -13,6 +13,12 @@ rem    /sdk <dir>      the NeuroPilot SDK's per-chip include dir for /dla
 rem                    (e.g. <sdk>\neuron_sdk\<chip>\include). Overrides
 rem                    MIE_MTK_SDK_INCLUDE_DIR and is remembered in
 rem                    scripts\local_paths.bat for the next run.
+rem    /qnnnative      also build the Qualcomm QNN native C API backend
+rem                    (needs QnnInterface.h - see /qnnsdk below)
+rem    /qnnsdk <dir>   the QNN SDK include dir for /qnnnative (the one holding
+rem                    QnnInterface.h and System\QnnSystemContext.h). Overrides
+rem                    MIE_QNN_SDK_INCLUDE_DIR and is remembered in
+rem                    scripts\local_paths.bat for the next run.
 rem    /serial <id>    adb device serial for /push (required when more than
 rem                    one device is attached)
 rem    /api27          build against API level 27 instead of 21
@@ -46,6 +52,8 @@ set "WANT_PAUSE=1"
 set "OPTIM=release"
 set "HAD_ARGS=0"
 set "WANT_SDK_DIR="
+set "WANT_QNN_NATIVE=0"
+set "WANT_QNN_SDK_DIR="
 set "ADB_SERIAL="
 
 :parse
@@ -54,6 +62,8 @@ set "HAD_ARGS=1"
 if /i "%~1"=="/mtk"      ( set "WANT_MTK=1"   & set "WANT_API27=1" & shift & goto :parse )
 if /i "%~1"=="/dla"      ( set "WANT_DLA=1"   & shift & goto :parse )
 if /i "%~1"=="/sdk"      ( set "WANT_SDK_DIR=%~2" & shift & shift & goto :parse )
+if /i "%~1"=="/qnnnative" ( set "WANT_QNN_NATIVE=1" & shift & goto :parse )
+if /i "%~1"=="/qnnsdk"    ( set "WANT_QNN_SDK_DIR=%~2" & shift & shift & goto :parse )
 if /i "%~1"=="/serial"   ( set "ADB_SERIAL=%~2"   & shift & shift & goto :parse )
 if /i "%~1"=="/api27"    ( set "WANT_API27=1" & shift & goto :parse )
 if /i "%~1"=="/debug"    ( set "OPTIM=debug"  & shift & goto :parse )
@@ -128,11 +138,33 @@ if "%WANT_DLA%"=="1" (
   )
 )
 
+rem The QNN native backend needs the QNN SDK's C API headers (it includes
+rem QnnInterface.h and System\QnnSystemContext.h). Priority: /qnnsdk flag, then
+rem MIE_QNN_SDK_INCLUDE_DIR from the environment (or scripts\local_paths.bat).
+set "QNN_SDK_INC="
+if defined WANT_QNN_SDK_DIR set "QNN_SDK_INC=%WANT_QNN_SDK_DIR%"
+if not defined QNN_SDK_INC set "QNN_SDK_INC=%MIE_QNN_SDK_INCLUDE_DIR%"
+if "%WANT_QNN_NATIVE%"=="1" (
+  if not defined QNN_SDK_INC (
+    echo [mie] ERROR: /qnnnative needs the QNN SDK's C API headers.
+    echo            Pass /qnnsdk ^<dir^> or set MIE_QNN_SDK_INCLUDE_DIR to the
+    echo            QNN SDK include dir holding QnnInterface.h, e.g.
+    echo            ^<sdk^>\include\QNN. They are confidential Qualcomm material
+    echo            and are NOT fetched automatically.
+    goto :fail
+  )
+  if not exist "%QNN_SDK_INC%\QnnInterface.h" (
+    echo [mie] ERROR: no QnnInterface.h under "%QNN_SDK_INC%"
+    goto :fail
+  )
+)
+
 set "PLATFORM=android-21"
 if "%WANT_API27%"=="1" set "PLATFORM=android-27"
 set "BACKEND=cpu, gpu, qnn"
 if "%WANT_MTK%"=="1" set "BACKEND=%BACKEND%, mtk"
 if "%WANT_DLA%"=="1" set "BACKEND=%BACKEND%, dla"
+if "%WANT_QNN_NATIVE%"=="1" set "BACKEND=%BACKEND%, qnnnative"
 
 echo.
 echo [mie] NDK      : %NDK%
@@ -148,9 +180,10 @@ if "%DO_CLEAN%"=="1" (
   call "%NDK%\ndk-build.cmd" clean >nul 2>&1
 )
 
-set "BUILD_ARGS=APP_ABI=%ABI% APP_PLATFORM=%PLATFORM% APP_OPTIM=%OPTIM% MIE_ENABLE_MTK=%WANT_MTK% MIE_ENABLE_MTK_DLA=%WANT_DLA%"
+set "BUILD_ARGS=APP_ABI=%ABI% APP_PLATFORM=%PLATFORM% APP_OPTIM=%OPTIM% MIE_ENABLE_MTK=%WANT_MTK% MIE_ENABLE_MTK_DLA=%WANT_DLA% MIE_ENABLE_QNN_NATIVE=%WANT_QNN_NATIVE%"
 if "%WANT_MTK%"=="1" set "BUILD_ARGS=%BUILD_ARGS% MIE_MTK_INCLUDE_DIR=%CD%\third_party\mtk\include"
 if "%WANT_DLA%"=="1" set "BUILD_ARGS=%BUILD_ARGS% MIE_MTK_SDK_INCLUDE_DIR=%MTK_SDK_INC%"
+if "%WANT_QNN_NATIVE%"=="1" set "BUILD_ARGS=%BUILD_ARGS% MIE_QNN_SDK_INCLUDE_DIR=%QNN_SDK_INC%"
 
 echo [mie] building...
 call "%NDK%\ndk-build.cmd" %BUILD_ARGS%
@@ -225,17 +258,23 @@ if "%WANT_ZIP%"=="1" (
 )
 
 rem Remember the machine-local paths for the next run. Written only when /sdk
-rem was given this run; every assignment is guarded, so the file never
-rem overrides an explicit environment variable or flag. The values persisted
-rem are the RESOLVED ones (%NDK% / %MTK_SDK_INC%), which the dependency checks
-rem above have already validated.
-if defined WANT_SDK_DIR (
-  echo [mie] saving local paths to scripts\local_paths.bat
-  > "%SCRIPT_DIR%local_paths.bat" echo @echo off
-  >> "%SCRIPT_DIR%local_paths.bat" echo rem Written by build_android.bat via /sdk. Machine-local, safe to delete.
-  >> "%SCRIPT_DIR%local_paths.bat" echo if not defined ANDROID_NDK_ROOT set "ANDROID_NDK_ROOT=%NDK%"
-  if defined MTK_SDK_INC >> "%SCRIPT_DIR%local_paths.bat" echo if not defined MIE_MTK_SDK_INCLUDE_DIR set "MIE_MTK_SDK_INCLUDE_DIR=%MTK_SDK_INC%"
-)
+rem or /qnnsdk was given this run; every assignment is guarded, so the file
+rem never overrides an explicit environment variable or flag. The values
+rem persisted are the RESOLVED ones (%NDK% / %MTK_SDK_INC% / %QNN_SDK_INC%),
+rem which the dependency checks above have already validated.
+if defined WANT_SDK_DIR goto :save_paths
+if defined WANT_QNN_SDK_DIR goto :save_paths
+goto :save_paths_done
+
+:save_paths
+echo [mie] saving local paths to scripts\local_paths.bat
+> "%SCRIPT_DIR%local_paths.bat" echo @echo off
+>> "%SCRIPT_DIR%local_paths.bat" echo rem Written by build_android.bat. Machine-local, safe to delete.
+>> "%SCRIPT_DIR%local_paths.bat" echo if not defined ANDROID_NDK_ROOT set "ANDROID_NDK_ROOT=%NDK%"
+if defined MTK_SDK_INC >> "%SCRIPT_DIR%local_paths.bat" echo if not defined MIE_MTK_SDK_INCLUDE_DIR set "MIE_MTK_SDK_INCLUDE_DIR=%MTK_SDK_INC%"
+if defined QNN_SDK_INC >> "%SCRIPT_DIR%local_paths.bat" echo if not defined MIE_QNN_SDK_INCLUDE_DIR set "MIE_QNN_SDK_INCLUDE_DIR=%QNN_SDK_INC%"
+
+:save_paths_done
 
 if "%WANT_PUSH%"=="1" (
   echo.
@@ -281,6 +320,9 @@ echo   /mtk            build the MediaTek NeuroPilot backend, implies /api27
 echo   /dla            build the MediaTek DLA (Neuron Runtime V2) backend
 echo   /sdk ^<dir^>      SDK per-chip include dir for /dla, remembered for
 echo                   next runs (scripts\local_paths.bat)
+echo   /qnnnative      build the Qualcomm QNN native C API backend
+echo   /qnnsdk ^<dir^>   QNN SDK include dir for /qnnnative (holding
+echo                   QnnInterface.h), remembered for next runs
 echo   /serial ^<id^>    adb device serial for /push
 echo   /api27          target API level 27 instead of 21
 echo   /abi ^<abi^>      target ABI, default arm64-v8a
