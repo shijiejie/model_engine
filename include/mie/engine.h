@@ -144,6 +144,15 @@ constexpr char kBackendType[] = "backend_type";
 // "balanced" makes it call std::terminate and abort the whole process instead
 // of reporting a bad option, so never pass anything unvalidated here.
 constexpr char kHtpPerformance[] = "htp_performance_mode";
+// Perf control strategy: numeric, 0=manual (default) | 1=auto (HTP/DSP decide).
+constexpr char kHtpPerfCtrlStrategy[] = "htp_perf_ctrl_strategy";
+// Precision for fp32 graphs: numeric, 0=quantized | 1=fp16 (default). fp16 is
+// already the default and the fastest, so this mainly lets you force quantized.
+constexpr char kHtpPrecision[] = "htp_precision";
+// Graph optimization strategy: numeric, 0=inference (default) | 1=prepare
+// (faster build, less optimal graph) | 2=inference_O3 (slowest build, most
+// optimal graph).
+constexpr char kHtpOptimizationStrategy[] = "htp_optimization_strategy";
 constexpr char kHtpPdSession[] = "htp_pd_session";  // "unsigned" | "signed"
 // Directory holding libQnnHtpV<NN>Skel.so (sets $ADSP_LIBRARY_PATH).
 constexpr char kSkelLibraryDir[] = "skel_library_dir";
