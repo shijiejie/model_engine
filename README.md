@@ -1,6 +1,6 @@
 # mie — minimal multi-backend model inference engine
 
-One abstraction, five backends, **one implementation file per backend**.
+One abstraction, six backends, **one implementation file per backend**.
 
 | `Backend` | What runs | How it is reached | Build-time dep |
 |-----------|-----------|-------------------|----------------|
@@ -9,13 +9,17 @@ One abstraction, five backends, **one implementation file per backend**.
 | `kQnn`    | Qualcomm QNN (AI Engine Direct) HTP / NPU | `dlopen` + TFLite external-delegate plugin ABI | none |
 | `kMtk`    | MediaTek NeuroPilot NPU, from a `.tflite` | `dlopen` + `NeuroPilotTFLiteShim.h` | shim header only |
 | `kMtkDla` | MediaTek NPU, from a precompiled `.dla` | `dlopen` + Neuron Runtime **V2** C API | `neuron/api` headers |
+| `kQnnNative` | Qualcomm QNN HTP / NPU, from a precompiled context binary (`.bin`) | `dlopen` + QNN native C API (`QnnInterface`) | QNN SDK headers |
 
 CPU/GPU/QNN are all "one TFLite interpreter plus an optional delegate", so they
 share `src/tflite_interpreter.cc` and differ only in which delegate they build.
 MTK is *not* a TFLite delegate at all — it is a separate runtime — so it is a
 self-contained `Engine` implementation, and `kMtkDla` is a second one: it loads
 a model compiled ahead of time by the NeuroPilot SDK's `ncc-tflite` and runs it
-through the Neuron Runtime. The two MediaTek backends are not redundant — the
+through the Neuron Runtime. `kQnnNative` is a third self-contained runtime: it
+runs a QNN context binary compiled ahead of time by
+`qnn-context-binary-generator` straight through the QNN native C API. The two
+MediaTek backends are not redundant — the
 offline compiler maps models the on-device delegate rejects (see the DLA note
 below).
 
@@ -35,6 +39,7 @@ src/backend_gpu.{h,cc}
 src/backend_qnn.{h,cc}
 src/backend_mtk.{h,cc}          self-contained: NeuroPilot, no TFLite
 src/backend_mtk_dla.{h,cc}      self-contained: Neuron Runtime, no TFLite
+src/backend_qnn_native.{h,cc}   self-contained: QNN C API, no TFLite
 examples/run_model.cc
 tools/qnn_probe.cc              drives the QNN delegate's own C API (diagnostic)
 tools/dla_compile.sh            on-device .tflite -> .dla compiler front-end
@@ -111,12 +116,14 @@ dist/mie-arm64-v8a/
   BUILD.txt                       what was built, with which flags
 ```
 
-Options: `/mtk` `/dla` `/api27` `/abi <abi>` `/debug` `/zip` `/push` `/no-clean`.
+Options: `/mtk` `/dla` `/api27` `/abi <abi>` `/debug` `/zip` `/push` `/no-clean`,
+plus `/qnnnative` (QNN native backend; needs `/qnnsdk <dir>`).
 `/push` deploys `bin/` to `/data/local/tmp/mie` and makes the binary executable.
 `/mtk` and `/dla` need MediaTek material that is not fetched automatically: the
 shim header (`third_party/mtk/include/NeuroPilotTFLiteShim.h`) and the SDK's
 `neuron/api` headers (`MIE_MTK_SDK_INCLUDE_DIR`, or a copy under
-`third_party/mtk/sdk_include/`) respectively.
+`third_party/mtk/sdk_include/`) respectively; `/qnnnative` needs the QNN SDK's
+C API headers (`/qnnsdk <dir holding QnnInterface.h>`).
 
 Bare `ndk-build` works too — the build files live in `jni/`, so from the project
 root a plain `<ndk>\ndk-build.cmd` needs no extra flags.
@@ -168,6 +175,7 @@ SSD-MobileNet.
 | `multi_add.bin` | `cpu` | – | 7.8 ms | 0.9 us |
 | `multi_add.bin` | `gpu` | 3/3 | 408 ms | 911 us |
 | `multi_add.bin` | `qnn` | 3/3 | 712 ms | 918 us |
+| `multi_add.bin` | `qnnnative` | – | 125 ms | 927 us |
 | `detect.tflite` | `cpu` | – | 2.3 ms | 6.05 ms |
 | `detect.tflite` | `gpu` cold | partial | 1187.0 ms | 9.68 ms |
 | `detect.tflite` | `gpu` **warm cache** | partial | **160.5 ms** | 11.51 ms |
@@ -239,9 +247,36 @@ Two traps that each cost an afternoon:
 
 * **`htp_performance_mode` takes the NUMERIC enum only** — `2` for burst, never
   `"burst"`. Any name string makes the delegate call `std::terminate` and
-  **abort the whole process**, with no error message.
+  **abort the whole process**, with no error message. Measured on the real
+  device, `2` (burst) drops `detect.tflite` from ~1.67 ms to ~0.25 ms per
+  inference (6.6×) with byte-identical outputs — the default leaves the HTP in
+  an unconfigured low-power state, so set `opt::kHtpPerformance` explicitly for
+  latency-critical work.
 * **Do not set `library_path`** when the libs are already on `LD_LIBRARY_PATH` /
   in `jniLibs`; it makes delegate application fail.
+
+**Qualcomm QNN native C API (`kQnnNative`)** — no TFLite; it `dlopen`s
+`libQnnHtp.so` and `libQnnSystem.so` and drives the QNN C API directly. Input is
+a precompiled context binary (`.bin`), produced on the device by the `kQnn`
+delegate cache (`cache_dir`/`model_token`) or offline by
+`qnn-context-binary-generator`. Build with `-DMIE_ENABLE_QNN_NATIVE=ON` and
+`-DMIE_QNN_SDK_INCLUDE_DIR=<dir holding QnnInterface.h>`, or `/qnnnative` /
+`/qnnsdk <dir>` on the packaging script.
+
+* **Graph I/O tensors are baked into the binary.** Introspect them with
+  `QnnSystemContext_getBinaryInfo` and hand the raw descriptors straight to
+  `graphExecute` — do not call `tensorCreateGraphTensor` /
+  `tensorCreateContextTensor`, the tensors already exist.
+* **Force `QNN_TENSOR_VERSION_1` on the execution descriptors.** The introspected
+  tensor may be V2, whose extra fields shift the `clientBuf` union offset.
+* **QAIRT 2.50 no longer exports `QnnSystemContext_*`.** `libQnnSystem.so` only
+  exports `QnnSystemInterface_getProviders`; resolve `systemContextCreate` /
+  `getBinaryInfo` / `free` from the returned function table.
+* Options: `opt::kQnnNativeLibrary` / `kQnnSystemLibrary` (the `.so` name or
+  path) and `kQnnGraphName` (which graph, when the binary holds several).
+* `ResizeInput` is always a no-op: shapes are baked in.
+* The introspected tensor names are QNN-internal ids (`"0"`, `"1"`, …), not the
+  source `.tflite` names — the context binary does not carry them.
 
 **MediaTek NeuroPilot** — `-DMIE_ENABLE_MTK=ON -DMIE_MTK_INCLUDE_DIR=<dir with
 NeuroPilotTFLiteShim.h> -DANDROID_API=27`. There is **no `MIE_MTK_LIB`**: the
@@ -333,6 +368,7 @@ Neuron Runtime (`libneuron_runtime.so`, present on MediaTek devices) is
 | backend | compiles | links | runs on a device |
 |---------|----------|-------|------------------|
 | CPU / GPU / QNN | yes | yes | **yes** — Qualcomm device |
+| QNN native | yes | yes | **yes** — Qualcomm device; the `add.bin` / `multi_add.bin` context binaries reproduce checksum `5cba39c5` |
 | MTK | yes | yes | **yes** — MediaTek device, Android 16 |
 | MTK DLA | yes | yes | **yes** — same device, `.dla` from `ncc-tflite` 7.3.15; V2 request API, per-run input tracking verified |
 
