@@ -83,6 +83,8 @@ std::size_t DataTypeSize(Qnn_DataType_t type) {
     case QNN_DATATYPE_UINT_8:
     case QNN_DATATYPE_INT_8:
     case QNN_DATATYPE_BOOL_8:
+    case QNN_DATATYPE_SFIXED_POINT_8:
+    case QNN_DATATYPE_UFIXED_POINT_8:
       return 1;
     case QNN_DATATYPE_UINT_16:
     case QNN_DATATYPE_INT_16:
@@ -117,6 +119,7 @@ Type MapType(Qnn_DataType_t type) {
     case QNN_DATATYPE_INT_64:
       return Type::kInt64;
     case QNN_DATATYPE_UINT_8:
+    case QNN_DATATYPE_UFIXED_POINT_8:
       return Type::kUInt8;
     case QNN_DATATYPE_INT_8:
     case QNN_DATATYPE_SFIXED_POINT_8:
@@ -192,6 +195,11 @@ bool ReadFile(const std::string& path, std::vector<uint8_t>* out,
   std::fseek(file, 0, SEEK_END);
   const long size = std::ftell(file);
   std::fseek(file, 0, SEEK_SET);
+  if (size < 0) {
+    std::fclose(file);
+    SetError(error, "cannot determine size of " + path);
+    return false;
+  }
   out->resize(static_cast<std::size_t>(size));
   if (size > 0) {
     std::fread(out->data(), 1, static_cast<std::size_t>(size), file);
@@ -506,9 +514,19 @@ class QnnNativeEngine : public Engine {
       // the runtime-owned name/dimensions at our long-lived copies and fill the
       // raw host buffer. APP_WRITE for inputs, APP_READ for outputs — the
       // runtime copies in/out of clientBuf on execute.
+      //
+      // Force V1: the introspected tensor may carry V2 (which inserts
+      // isDynamicDimensions/sparseParams before memType, moving the clientBuf
+      // union to a different offset), but this backend only runs static dense
+      // graphs over raw buffers. Normalizing to V1 keeps the union and every
+      // field we fill self-consistent; the leading fields (id/dataFormat/
+      // quantizeParams) share offsets in both layouts, so the copy is intact.
       Qnn_Tensor_t t = src[i];
+      t.version = QNN_TENSOR_VERSION_1;
       t.v1.name = names[i].c_str();
       t.v1.type = is_input ? QNN_TENSOR_TYPE_APP_WRITE : QNN_TENSOR_TYPE_APP_READ;
+      t.v1.dataType = meta.dataType;
+      t.v1.rank = meta.rank;
       t.v1.dimensions = dims[i].empty() ? nullptr : dims[i].data();
       t.v1.memType = QNN_TENSORMEMTYPE_RAW;
       t.v1.clientBuf.data = tensor.data;
