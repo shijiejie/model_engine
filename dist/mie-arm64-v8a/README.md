@@ -286,10 +286,10 @@ SSD-MobileNet.
   benchmark: both outputs are byte-identical across `cpu`/`gpu`/`qnn`/
   `qnnnative` (FNV-1a checksum `5cba39c5` each), which exercises the multi-input
   → multi-output tensor mapping on every path.
-* `detect.tflite` on `qnnnative` was measured with the on-device delegate-cache
-  context binary, not the offline pipeline. Its init/latency are valid, but that
-  binary drops source tensor names and may reorder same-shape outputs (see the
-  QNN native section) — use the offline pipeline when output identity/order
+* `detect.tflite` on `qnnnative` runs the offline pipeline context binary
+  (`qnn-context-binary-generator`), so source tensor names and output order are
+  preserved — verified on the device (see the QNN native section). Prefer the
+  offline pipeline over a delegate-cache binary whenever output identity or order
   matters.
 
 A MediaTek device (Android 16). `dla` numbers
