@@ -251,20 +251,31 @@ Then `tflite2onnx detect_backbone.tflite detect_backbone.onnx`, apply pitfall
 
 ## Official references
 
+> Note: `docs.qualcomm.com` pages require a **free Qualcomm account login**
+> (SSO) — if a link redirects to a sign-in wall, log in first and reopen it.
+> The AI Hub docs on `workbench.aihub.qualcomm.com` are public and mirrored at
+> `app.aihub.qualcomm.com`. All links below were verified reachable.
+
 - Qualcomm AI Hub — Compiling Models (the `submit_compile_and_link_jobs`
   example): <https://workbench.aihub.qualcomm.com/docs/hub/compile_examples.html>
 - Qualcomm AI Hub — API / common options:
   <https://workbench.aihub.qualcomm.com/docs/hub/api.html>
 - Qualcomm AI Hub — FAQ (token, security, fees):
   <https://workbench.aihub.qualcomm.com/docs/hub/faq.html>
-- QAIRT — HTP API usage guidelines (Online Prepare / `QnnContext_getBinary`):
+- QAIRT — HTP API usage guidelines (Online Prepare callflow;
+  `QnnContext_getBinarySize`/`QnnContext_getBinary` are the "Online Prepare
+  Alternates" after `QnnGraph_finalize`):
   <https://docs.qualcomm.com/bundle/publicresource/80-63442-10/topics/htp_api_usage_guidelines.md>
-- QAIRT — supported API matrix (`QnnContext_getBinary` on HTP aarch64-android):
-  <https://docs.qualcomm.com/bundle/publicresource/80-63442-10/topics/supported_api.md>
-- QAIRT — C++ application sample (`contextGetBinarySize`):
-  <https://docs.qualcomm.com/bundle/publicresource/80-80020-15B/topics/develop-your-own-application-qairt-cpp.md>
+- QAIRT — API usage guidelines (QnnInterface providers, reading error codes,
+  threading rules): <https://docs.qualcomm.com/bundle/publicresource/80-63442-10/topics/api_usage_guidelines.md>
+- QAIRT — sample C++ application tutorial (`contextGetBinarySize`, saving and
+  loading a context binary): <https://docs.qualcomm.com/doc/80-63442-10/topic/sample_app.html>
+- QAIRT — Convert to QNN: Linux host → HTP target tutorial (offline context
+  generation with `qnn-context-binary-generator`, `hexagon-vXX` HTP arch):
+  <https://docs.qualcomm.com/bundle/publicresource/80-63442-10/topics/qnn_tutorial_linux_host_linux_target_htp.md>
 - ONNX Runtime — QNN Execution Provider (precompiled QNN ONNX):
   <https://onnxruntime.ai/docs/execution-providers/QNN-ExecutionProvider.html>
 - ONNX IR (why `value_info` must not duplicate model IO):
   <https://github.com/onnx/onnx/blob/main/docs/IR.md>
-- QAIRT SDK download: <https://softwarecenter.qualcomm.com/#/catalog/item/Qualcomm_AI_Runtime_Community>
+- QAIRT SDK download — via Qualcomm Package Manager (QPM3):
+  <https://qpm.qualcomm.com/#/main/tools/details/QPM3>
