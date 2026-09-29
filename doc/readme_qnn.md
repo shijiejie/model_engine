@@ -107,7 +107,8 @@ pip install qai-hub
 ```
 
 Get an API token from the AI Hub console: log in at
-<https://aihub.qualcomm.com/>, avatar menu → Settings → API token. Pass it to
+[aihub.qualcomm.com](https://aihub.qualcomm.com/), avatar menu → Settings → API
+token. Pass it to
 the SDK without writing it to disk, e.g. via an environment variable
 (`QAI_HUB_TOKEN`).
 
@@ -179,8 +180,8 @@ The three scripts used for this document live in
    / TensorFlow-via-ONNX. A `.tflite` must first be converted to ONNX — and
    TFLite **custom ops block the converters** (see §3 for the strip trick).
 6. **tflite2onnx emits an ONNX that AI Hub rejects** with
-   `Tensors {…} occur in value_info but also in model IO` (an IR violation per
-   <https://github.com/onnx/onnx/blob/main/docs/IR.md>). Fix: drop the
+   `Tensors {…} occur in value_info but also in model IO` (an IR violation per the [ONNX IR
+   specification](https://github.com/onnx/onnx/blob/main/docs/IR.md)). Fix: drop the
    `value_info` entries whose names duplicate the graph inputs/outputs before
    submitting (onnx.checker does *not* catch this locally).
 7. **Device selection.** Filter the pool by chipset attribute (`"8750"`),
@@ -251,31 +252,31 @@ Then `tflite2onnx detect_backbone.tflite detect_backbone.onnx`, apply pitfall
 
 ## Official references
 
-> Note: `docs.qualcomm.com` pages require a **free Qualcomm account login**
-> (SSO) — if a link redirects to a sign-in wall, log in first and reopen it.
-> The AI Hub docs on `workbench.aihub.qualcomm.com` are public and mirrored at
-> `app.aihub.qualcomm.com`. All links below were verified reachable.
+> Note: every link below was fetched and verified reachable at write time.
+> `docs.qualcomm.com` pages may show a Qualcomm ID login wall in a browser
+> (sign up for a free account and reopen); on some networks `docs.qualcomm.com`
+> is unreachable — the same docs ship inside the QAIRT SDK zip. The AI Hub
+> docs are public and mirrored at `app.aihub.qualcomm.com`.
 
-- Qualcomm AI Hub — Compiling Models (the `submit_compile_and_link_jobs`
-  example): <https://workbench.aihub.qualcomm.com/docs/hub/compile_examples.html>
-- Qualcomm AI Hub — API / common options:
-  <https://workbench.aihub.qualcomm.com/docs/hub/api.html>
-- Qualcomm AI Hub — FAQ (token, security, fees):
-  <https://workbench.aihub.qualcomm.com/docs/hub/faq.html>
-- QAIRT — HTP API usage guidelines (Online Prepare callflow;
-  `QnnContext_getBinarySize`/`QnnContext_getBinary` are the "Online Prepare
-  Alternates" after `QnnGraph_finalize`):
-  <https://docs.qualcomm.com/bundle/publicresource/80-63442-10/topics/htp_api_usage_guidelines.md>
-- QAIRT — API usage guidelines (QnnInterface providers, reading error codes,
-  threading rules): <https://docs.qualcomm.com/bundle/publicresource/80-63442-10/topics/api_usage_guidelines.md>
-- QAIRT — sample C++ application tutorial (`contextGetBinarySize`, saving and
-  loading a context binary): <https://docs.qualcomm.com/doc/80-63442-10/topic/sample_app.html>
-- QAIRT — Convert to QNN: Linux host → HTP target tutorial (offline context
-  generation with `qnn-context-binary-generator`, `hexagon-vXX` HTP arch):
-  <https://docs.qualcomm.com/bundle/publicresource/80-63442-10/topics/qnn_tutorial_linux_host_linux_target_htp.md>
-- ONNX Runtime — QNN Execution Provider (precompiled QNN ONNX):
-  <https://onnxruntime.ai/docs/execution-providers/QNN-ExecutionProvider.html>
-- ONNX IR (why `value_info` must not duplicate model IO):
-  <https://github.com/onnx/onnx/blob/main/docs/IR.md>
-- QAIRT SDK download — via Qualcomm Package Manager (QPM3):
-  <https://qpm.qualcomm.com/#/main/tools/details/QPM3>
+- [Qualcomm AI Hub — Compiling Models](https://workbench.aihub.qualcomm.com/docs/hub/compile_examples.html)
+  (the `submit_compile_and_link_jobs` example)
+- [Qualcomm AI Hub — API / common options](https://workbench.aihub.qualcomm.com/docs/hub/api.html)
+- [Qualcomm AI Hub — FAQ](https://workbench.aihub.qualcomm.com/docs/hub/faq.html)
+  (token, security, fees)
+- [QAIRT — HTP API usage guidelines](https://docs.qualcomm.com/bundle/publicresource/80-63442-10/topics/htp_api_usage_guidelines.md)
+  (Online Prepare callflow; `QnnContext_getBinarySize`/`QnnContext_getBinary`
+  are the "Online Prepare Alternates" after `QnnGraph_finalize`)
+- [QAIRT — API usage guidelines](https://docs.qualcomm.com/bundle/publicresource/80-63442-10/topics/api_usage_guidelines.md)
+  (QnnInterface providers, reading error codes, threading rules)
+- [QAIRT — sample C++ application tutorial](https://docs.qualcomm.com/doc/80-63442-10/topic/sample_app.html)
+  (`contextGetBinarySize`, saving and loading a context binary)
+- [QAIRT — Convert to QNN: Linux host → HTP target tutorial](https://docs.qualcomm.com/bundle/publicresource/80-63442-10/topics/qnn_tutorial_linux_host_linux_target_htp.md)
+  (offline context generation with `qnn-context-binary-generator`,
+  `hexagon-vXX` HTP arch)
+- [ONNX Runtime — QNN Execution Provider](https://onnxruntime.ai/docs/execution-providers/QNN-ExecutionProvider.html)
+  (precompiled QNN ONNX)
+- [ONNX IR specification](https://github.com/onnx/onnx/blob/main/docs/IR.md)
+  (why `value_info` must not duplicate model IO)
+- [QAIRT SDK — product page and download entry](https://www.qualcomm.com/developer/software/qualcomm-ai-engine-direct-sdk)
+  (Software Center / QPM3; the download itself requires a free Qualcomm
+  account)
