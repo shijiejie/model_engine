@@ -362,6 +362,13 @@ delegate cache (`cache_dir`/`model_token`) or offline by
 `-DMIE_QNN_SDK_INCLUDE_DIR=<dir holding QnnInterface.h>`, or `/qnnnative` /
 `/qnnsdk <dir>` on the packaging script.
 
+**Generating context binaries — three ways.** Besides the offline pipeline
+below, a `.bin` can also be produced (a) **on-device** by the `kQnn` delegate
+cache (`cache_dir`/`model_token`), or (b) **in the cloud** via Qualcomm AI Hub
+(no local QAIRT toolchain). Both paths, the exact commands, every trap hit on a
+real device, and the official references are collected in
+[doc/readme_qnn.md](doc/readme_qnn.md).
+
 **Offline generation (canonical pipeline).** Prefer this over the delegate cache:
 the delegate cache drops source tensor names and may reorder same-shape outputs;
 the offline pipeline preserves both. From the SDK's `bin/x86_64-linux-clang/`
