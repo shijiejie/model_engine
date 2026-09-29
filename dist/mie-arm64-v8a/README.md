@@ -114,6 +114,21 @@ set ANDROID_NDK_ROOT=D:\path\to\android-ndk-r16b
 scripts\build_android.bat /zip
 ```
 
+The NDK path and the vendor SDK include dirs can instead be recorded once in
+`scripts/local_paths.bat` (a committed template with example paths), which the
+script reads automatically — so you don't have to set them every run. Its three
+variables are all optional and each is only consulted when the matching backend
+is built:
+
+* `ANDROID_NDK_ROOT` — the NDK; required for every Android build.
+* `MIE_MTK_SDK_INCLUDE_DIR` — only for `/dla`; the MediaTek NeuroPilot SDK's
+  per-chip include dir (the one holding `neuron/api/RuntimeV2.h`).
+* `MIE_QNN_SDK_INCLUDE_DIR` — only for `/qnnnative`; the Qualcomm QNN (QAIRT)
+  SDK include dir (the one holding `QnnInterface.h`).
+
+Pass `/sdk <dir>` / `/qnnsdk <dir>` to `build_android.bat` and it writes those
+paths back into `scripts/local_paths.bat` for the next run.
+
 It uses the committed prebuilt TFLite under `third_party/tflite-dist/`, runs
 `ndk-build`, and writes a self-contained package:
 
