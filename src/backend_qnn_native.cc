@@ -50,12 +50,35 @@ struct QnnNativeApi {
   QnnContext_FreeFn_t contextFree;
   QnnGraph_RetrieveFn_t graphRetrieve;
   QnnGraph_ExecuteFn_t graphExecute;
+  // Error API (QnnError.h), also carried in the interface table. Optional: the
+  // struct allows it to be NULL when unsupported.
+  QnnError_GetMessageFn_t errorGetMessage;
 
   // QNN System (QnnSystemContext.h), from libQnnSystem.so's interface table.
   QnnSystemContext_CreateFn_t systemContextCreate;
   QnnSystemContext_GetBinaryInfoFn_t systemContextGetBinaryInfo;
   QnnSystemContext_FreeFn_t systemContextFree;
 };
+
+// Formats a Qnn_ErrorHandle_t so the real cause of a failed call is visible
+// instead of a blanket guess. The raw handle is kept verbatim (it is opaque but
+// stable in logcat); a human-readable backend message is appended when the
+// interface provides errorGetMessage.
+std::string DescribeQnnError(const QnnNativeApi& api, Qnn_ErrorHandle_t err) {
+  char hex[24];
+  std::snprintf(hex, sizeof(hex), "0x%llx",
+                static_cast<unsigned long long>(err));
+  std::string message = "error " + std::string(hex);
+  if (api.errorGetMessage != nullptr) {
+    const char* text = nullptr;
+    if (api.errorGetMessage(err, &text) == QNN_SUCCESS && text != nullptr) {
+      message += " (";
+      message += text;
+      message += ")";
+    }
+  }
+  return message;
+}
 
 // Resolves one symbol and records the first miss, mirroring backend_mtk_dla.cc.
 struct SymbolLoader {
@@ -310,6 +333,7 @@ class QnnNativeEngine : public Engine {
     api_.contextFree = qnn->contextFree;
     api_.graphRetrieve = qnn->graphRetrieve;
     api_.graphExecute = qnn->graphExecute;
+    api_.errorGetMessage = qnn->errorGetMessage;
     if (api_.backendCreate == nullptr || api_.backendFree == nullptr ||
         api_.contextCreateFromBinary == nullptr || api_.contextFree == nullptr ||
         api_.graphRetrieve == nullptr || api_.graphExecute == nullptr) {
@@ -433,13 +457,15 @@ class QnnNativeEngine : public Engine {
       SetError(error, "QnnBackend_create failed");
       return false;
     }
-    if (api_.contextCreateFromBinary(backend_, nullptr, nullptr, binary,
-                                     binary_size, &context_, nullptr) !=
-            QNN_SUCCESS ||
-        context_ == nullptr) {
+    Qnn_ErrorHandle_t ctx_err = api_.contextCreateFromBinary(
+        backend_, nullptr, nullptr, binary, binary_size, &context_, nullptr);
+    if (ctx_err != QNN_SUCCESS || context_ == nullptr) {
       SetError(error,
-               "QnnContext_createFromBinary failed (the context binary must "
-               "match this device's SoC)");
+               "QnnContext_createFromBinary failed (" +
+                   DescribeQnnError(api_, ctx_err) +
+                   "); common causes: missing HTP skels (set ADSP_LIBRARY_PATH "
+                   "to the skels directory) or a context binary built for a "
+                   "different SoC");
       return false;
     }
     if (api_.graphRetrieve(context_, graph_name_.c_str(), &graph_) !=
