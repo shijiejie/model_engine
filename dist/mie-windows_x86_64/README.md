@@ -272,6 +272,7 @@ SSD-MobileNet.
 | `detect.tflite` | `gpu` cold | partial | 1187.0 ms | 9.68 ms |
 | `detect.tflite` | `gpu` **warm cache** | partial | **160.5 ms** | 11.51 ms |
 | `detect.tflite` | `qnn` | **64/64** | 630 ms | **0.82 ms** |
+| `detect.tflite` | `qnnnative` | – | 146 ms | 2.169 ms |
 
 * **QNN is the clear winner on real work: 0.82 ms — 7× faster than CPU and 11×
   faster than GPU**, because it delegates the entire graph where the GPU
@@ -285,6 +286,11 @@ SSD-MobileNet.
   benchmark: both outputs are byte-identical across `cpu`/`gpu`/`qnn`/
   `qnnnative` (FNV-1a checksum `5cba39c5` each), which exercises the multi-input
   → multi-output tensor mapping on every path.
+* `detect.tflite` on `qnnnative` was measured with the on-device delegate-cache
+  context binary, not the offline pipeline. Its init/latency are valid, but that
+  binary drops source tensor names and may reorder same-shape outputs (see the
+  QNN native section) — use the offline pipeline when output identity/order
+  matters.
 
 A MediaTek device (Android 16). `dla` numbers
 are the same models compiled with `ncc-tflite --arch=mdla3.0` on the device,
