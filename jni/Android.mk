@@ -44,7 +44,12 @@ MIE_ENABLE_GPU      ?= 1
 MIE_ENABLE_MTK      ?= 0
 MIE_ENABLE_MTK_DLA  ?= 0
 MIE_ENABLE_QNN_NATIVE ?= 0
+MIE_ENABLE_RKNN     ?= 0
 MIE_BUILD_EXAMPLE   ?= 1
+
+ifneq ($(MIE_ENABLE_RKNN),0)
+$(error MIE_ENABLE_RKNN is ARM Linux-only and cannot be enabled by ndk-build)
+endif
 MIE_TFLITE_ROOT     ?= $(MIE_ROOT)/third_party/tflite-dist
 MIE_MTK_INCLUDE_DIR ?=
 MIE_MTK_SDK_INCLUDE_DIR ?=
@@ -80,10 +85,12 @@ LOCAL_SRC_FILES := $(MIE_TFLITE_ROOT)/libs/android/$(TARGET_ARCH_ABI)/libtensorf
 LOCAL_EXPORT_C_INCLUDES := $(MIE_TFLITE_ROOT)/include
 include $(PREBUILT_SHARED_LIBRARY)
 
+ifeq ($(MIE_ENABLE_GPU),1)
 include $(CLEAR_VARS)
 LOCAL_MODULE := tensorflowlite_gpu_delegate
 LOCAL_SRC_FILES := $(MIE_TFLITE_ROOT)/libs/android/$(TARGET_ARCH_ABI)/libtensorflowlite_gpu_delegate.so
 include $(PREBUILT_SHARED_LIBRARY)
+endif
 
 # ---------------------------------------------------------------------------
 # libmie — the framework, static so an app links it in.
@@ -97,6 +104,7 @@ LOCAL_CPPFLAGS := -std=c++11 -Wall -Wextra
 LOCAL_CFLAGS := -DMIE_ENABLE_GPU=$(MIE_ENABLE_GPU) -DMIE_ENABLE_MTK=$(MIE_ENABLE_MTK)
 LOCAL_CFLAGS += -DMIE_ENABLE_MTK_DLA=$(MIE_ENABLE_MTK_DLA)
 LOCAL_CFLAGS += -DMIE_ENABLE_QNN_NATIVE=$(MIE_ENABLE_QNN_NATIVE)
+LOCAL_CFLAGS += -DMIE_ENABLE_RKNN=0 -DMIE_ENABLE_TFLITE_BACKENDS=1
 
 ifeq ($(MIE_ENABLE_MTK),1)
 ifeq ($(MIE_MTK_INCLUDE_DIR),)
@@ -120,7 +128,10 @@ LOCAL_C_INCLUDES += $(MIE_QNN_SDK_INCLUDE_DIR)
 endif
 
 # Recorded for consumers; a static library links nothing by itself.
-LOCAL_SHARED_LIBRARIES := tensorflowlite_c tensorflowlite_gpu_delegate
+LOCAL_SHARED_LIBRARIES := tensorflowlite_c
+ifeq ($(MIE_ENABLE_GPU),1)
+LOCAL_SHARED_LIBRARIES += tensorflowlite_gpu_delegate
+endif
 LOCAL_EXPORT_C_INCLUDES := $(MIE_ROOT)/include $(MIE_TFLITE_ROOT)/include
 include $(BUILD_STATIC_LIBRARY)
 
@@ -140,9 +151,18 @@ LOCAL_CPPFLAGS := -std=c++11 -Wall -Wextra
 LOCAL_CFLAGS := -DMIE_ENABLE_GPU=$(MIE_ENABLE_GPU) -DMIE_ENABLE_MTK=$(MIE_ENABLE_MTK)
 LOCAL_CFLAGS += -DMIE_ENABLE_MTK_DLA=$(MIE_ENABLE_MTK_DLA)
 LOCAL_CFLAGS += -DMIE_ENABLE_QNN_NATIVE=$(MIE_ENABLE_QNN_NATIVE)
+LOCAL_CFLAGS += -DMIE_ENABLE_RKNN=0 -DMIE_ENABLE_TFLITE_BACKENDS=1
 LOCAL_STATIC_LIBRARIES := mie
-LOCAL_SHARED_LIBRARIES := tensorflowlite_c tensorflowlite_gpu_delegate
-LOCAL_LDLIBS := -llog -ldl -lEGL -lGLESv3
+LOCAL_SHARED_LIBRARIES := tensorflowlite_c
+LOCAL_LDLIBS := -ldl
+ifeq ($(MIE_ENABLE_MTK),1)
+# NeuroPilotTFLiteShim.h calls __android_log_print; only the MTK backend needs it.
+LOCAL_LDLIBS += -llog
+endif
+ifeq ($(MIE_ENABLE_GPU),1)
+LOCAL_SHARED_LIBRARIES += tensorflowlite_gpu_delegate
+LOCAL_LDLIBS += -lEGL -lGLESv3
+endif
 
 # ndk-build adds the libc++ archives itself but never passes -stdlib, so a bare
 # clang++ falls back to its own default and appends a spurious -lstdc++. That

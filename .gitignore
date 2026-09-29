@@ -1,7 +1,6 @@
 # ndk-build output (repo root only)
 /libs/
 /obj/
-/dist/
 
 # cmake output and ad-hoc scratch (repo root only)
 /build*/
@@ -17,6 +16,11 @@ third_party/mtk/
 *.zip
 # ...but keep the prebuilt TFLite distribution runtime libs
 !third_party/tflite-dist/libs/android/*/*.so
+# ...and the committed RKNN runtime + dist package binaries (not the *.zip,
+# which duplicate the extracted dist/ directories)
+!third_party/rknn/lib/Linux/aarch64/*.so
+!dist/**/*.a
+!dist/**/*.so
 
 # machine-local paths written by build_android.bat /sdk
 scripts/local_paths.bat

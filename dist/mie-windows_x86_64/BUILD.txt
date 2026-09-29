@@ -1,0 +1,24 @@
+mie - windows_x86_64 build
+
+built     : 2026-09-29
+platform  : Windows x86_64 (MSVC 19.51)
+backend   : cpu
+optim     : release
+tflite    : 2.18.0 (prebuilt)
+
+layout:
+  include/  public headers, add -Iinclude
+  lib/      mie.lib (static library)
+  bin/      mie_run.exe plus tensorflowlite_c.dll (runtime dependency)
+  examples/ run_model.cc, the demo driver (built as bin/mie_run.exe)
+  testdata/ demo models (ssd/detect.tflite + labelmap.txt)
+  README.md full documentation
+
+Runtime note: mie_run.exe loads tensorflowlite_c.dll from its own directory.
+Keep bin/ files together. GPU/QNN/MTK backends are not available in the
+Windows build (GPU delegate ships only for Android; QNN/MTK require the
+vendor's device runtime).
+
+Integration note: link mie.lib into your application and add -Iinclude.
+mie.lib was built against the prebuilt tensorflowlite_c.dll import library
+(tensorflowlite_c.dll.if.lib); ship tensorflowlite_c.dll alongside your exe.

@@ -26,6 +26,7 @@
     "MIE_ENABLE_MTK=1 requires API level 27 or newer: build with APP_PLATFORM=android-27 (ndk-build) or -DANDROID_API=27 (CMake)."
 #endif
 #include <android/NeuralNetworks.h>
+#include <android/hardware_buffer.h>
 #include "NeuroPilotTFLiteShim.h"
 #endif
 

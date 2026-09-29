@@ -1,0 +1,24 @@
+mie - arm64-v8a build
+
+built     : 2026-09-29T22:33:59
+abi       : arm64-v8a
+platform  : android-27
+backend   : cpu, gpu, qnn, mtk, dla, qnnnative
+optim     : release
+tflite    : 2.18.0
+ndk       : D:\path\to\android-ndk-r16b
+
+layout:
+  include/  public headers, add -Iinclude
+  lib/      libmie.a, link it or list the .a directly
+  bin/      mie_run plus the TFLite runtime .so it needs at runtime
+
+Runtime note: mie_run needs libtensorflowlite_c.so and
+libtensorflowlite_gpu_delegate.so on LD_LIBRARY_PATH. The Android linker does
+NOT search the executable's own directory, so keep bin/ together and run:
+  cd bin && LD_LIBRARY_PATH=. [ADSP_LIBRARY_PATH=<skels>] ./mie_run model.tflite qnn
+
+Integration note: libmie.a is built with APP_STL=c++_static. Link it
+into an app built with APP_STL := c++_static as well - Config passes
+std::string and std::vector across the API boundary, so mixing a
+static and a shared libc++ would break it.
