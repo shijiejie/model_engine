@@ -383,9 +383,17 @@ qnn-context-binary-generator \
 ```
 
 * `--htp_socs <asic-id>` targets a specific SoC (e.g. `sm8750` = SD 8 Elite /
-  V79). Without it the host emits a fallback arch and the device fails with
-  `QnnContext_createFromBinary ... must match this device's SoC`. The SoC -> arch
-  table lives in `docs/QAIRT-Docs/QNN/general/overview.html` (e.g. `sm8750` -> 69 / V79).
+  V79). Without it the host emits a fallback arch and the device-side
+  `QnnContext_createFromBinary` fails (see the error-reporting note below). The
+  SoC -> arch table lives in
+  `docs/QAIRT-Docs/QNN/general/overview.html` (e.g. `sm8750` -> 69 / V79).
+* **Device-side errors are not masked.** `QnnContext_createFromBinary` failures
+  report the real QNN error handle plus, when the interface exposes
+  `errorGetMessage`, its readable string (e.g. `error 0x36b1
+  (QNN_DEVICE_ERROR_INVALID_CONFIG: Invalid config values)`). Two common root
+  causes: missing HTP skels (set `ADSP_LIBRARY_PATH` to the skels dir — the
+  otherwise identical "skel load err 1002"), or a context binary built for a
+  different SoC.
 * The "may fall back to host default SoC/arch" WARNING that appears without
   `--backend_extensions_lib_path` is misleading for the `.so -> .bin` path: the
   generated file is still named `<file>.SM8750.bin` and loads on the device.
