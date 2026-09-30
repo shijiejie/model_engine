@@ -13,18 +13,9 @@
 
 #include "mie/engine.h"
 
-namespace {
+#include "common.h"
 
-mie::Backend ParseBackend(const char* name) {
-  const std::string s = name != nullptr ? name : "";
-  if (s == "gpu") return mie::Backend::kGpu;
-  if (s == "qnn") return mie::Backend::kQnn;
-  if (s == "mtk") return mie::Backend::kMtk;
-  if (s == "dla" || s == "mtk-dla") return mie::Backend::kMtkDla;
-  if (s == "qnnnative" || s == "qnn-native") return mie::Backend::kQnnNative;
-  if (s == "rknn") return mie::Backend::kRknn;
-  return mie::Backend::kCpu;
-}
+namespace {
 
 void PrintTensor(const char* label, int index, const mie::Tensor& tensor) {
   std::printf("  %s[%d] %-16s type=%d bytes=%zu shape=[", label, index,
@@ -33,19 +24,6 @@ void PrintTensor(const char* label, int index, const mie::Tensor& tensor) {
     std::printf("%s%d", i == 0 ? "" : ",", tensor.shape[i]);
   }
   std::printf("]\n");
-}
-
-// Deterministic, non-zero fill. Filling with zeros would let a model that never
-// ran produce the "right" answer, so the pattern has to be distinguishable.
-void FillInput(const mie::Tensor& tensor) {
-  if (tensor.data == nullptr) return;
-  if (tensor.type == mie::Type::kFloat32) {
-    float* values = static_cast<float*>(tensor.data);
-    const std::size_t count = tensor.bytes / sizeof(float);
-    for (std::size_t i = 0; i < count; ++i) values[i] = 1.0f;
-  } else {
-    std::memset(tensor.data, 1, tensor.bytes);
-  }
 }
 
 // Prints the head of a tensor, decoded per type, so a human can sanity-check it.
@@ -66,52 +44,6 @@ void PrintOutputHead(const mie::Tensor& tensor, std::size_t count) {
   std::printf("\n");
 }
 
-// A cheap "did anything actually happen" check: an all-zero output after a
-// non-zero input means the data path or the model is broken.
-bool IsDegenerate(const mie::Tensor& tensor) {
-  const unsigned char* bytes = static_cast<const unsigned char*>(tensor.data);
-  if (bytes == nullptr) return true;
-  for (std::size_t i = 0; i < tensor.bytes; ++i) {
-    if (bytes[i] != 0) return false;
-  }
-  return true;
-}
-
-// FNV-1a over the WHOLE output buffer, so two runs can be compared byte-exactly
-// without dumping megabytes. This is what makes the model-path vs model-buffer
-// comparison meaningful.
-std::uint32_t TensorChecksum(const mie::Tensor& tensor) {
-  const unsigned char* bytes = static_cast<const unsigned char*>(tensor.data);
-  std::uint32_t hash = 2166136261u;
-  if (bytes == nullptr) return hash;
-  for (std::size_t i = 0; i < tensor.bytes; ++i) {
-    hash ^= static_cast<std::uint32_t>(bytes[i]);
-    hash *= 16777619u;
-  }
-  return hash;
-}
-
-// Extra backend options from the environment, "key=value,key=value". A
-// debugging aid: vendor delegates are opaque, and their own logging is usually
-// the fastest way to find out why one refused to initialise.
-void AppendEnvOptions(mie::Config* config) {
-  const char* raw = std::getenv("MIE_OPTIONS");
-  if (raw == nullptr) return;
-  const std::string all(raw);
-  std::size_t pos = 0;
-  while (pos < all.size()) {
-    std::size_t comma = all.find(',', pos);
-    if (comma == std::string::npos) comma = all.size();
-    const std::string kv = all.substr(pos, comma - pos);
-    const std::size_t eq = kv.find('=');
-    if (eq != std::string::npos && eq > 0) {
-      config->options.push_back(
-          std::make_pair(kv.substr(0, eq), kv.substr(eq + 1)));
-    }
-    pos = comma + 1;
-  }
-}
-
 // Reads a whole file. Used to exercise the in-memory model-buffer path.
 bool ReadWholeFile(const char* path, std::vector<char>* out) {
   std::FILE* file = std::fopen(path, "rb");
@@ -129,6 +61,20 @@ bool ReadWholeFile(const char* path, std::vector<char>* out) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  if (argc > 1 && (std::strcmp(argv[1], "-h") == 0 ||
+                   std::strcmp(argv[1], "--help") == 0)) {
+    std::printf(
+        "usage: %s model [cpu|gpu|qnn|mtk|dla|qnnnative|rknn] [cache_dir] "
+        "[runs] [threads]\n"
+        "  (dla takes a precompiled .dla; qnnnative takes a QNN context .bin;\n"
+        "   rknn takes a native .rknn model and is ARM Linux-only)\n"
+        "  env MIE_MODEL_BUFFER=1   pass the model as an in-memory "
+        "buffer instead of a path\n"
+        "  env MIE_PROBE_OOB=1      exercise the Input()/Output() range guard\n",
+        argv[0]);
+  example::PrintOptionHelp();
+  return 0;
+  }
   if (argc < 2) {
     std::fprintf(stderr,
                  "usage: %s model [cpu|gpu|qnn|mtk|dla|qnnnative|rknn] [cache_dir] [runs] [threads]\n"
@@ -136,8 +82,9 @@ int main(int argc, char** argv) {
                  "   rknn takes a native .rknn model and is ARM Linux-only)\n"
                  "  env MIE_MODEL_BUFFER=1   pass the model as an in-memory "
                  "buffer instead of a path\n"
-                 "  env MIE_OPTIONS=k=v,...  extra backend options\n",
-                 argv[0]);
+                 "  env MIE_OPTIONS=k=v,...  extra backend options "
+                 "(list them with: %s --help)\n",
+                 argv[0], argv[0]);
     return 1;
   }
 
@@ -145,6 +92,7 @@ int main(int argc, char** argv) {
   // whatever backs it has to be destroyed after the engine; declaring it first
   // makes that fall out of C++'s reverse destruction order.
   std::vector<char> model_bytes;
+  std::string error;
 
   mie::Config config;
   config.model_path = argv[1];
@@ -156,7 +104,12 @@ int main(int argc, char** argv) {
     config.model_data = model_bytes.data();
     config.model_size = model_bytes.size();
   }
-  config.backend = ParseBackend(argc > 2 ? argv[2] : nullptr);
+  mie::Backend backend;
+  if (!example::ParseBackend(argc > 2 ? argv[2] : nullptr, &backend, &error)) {
+    std::fprintf(stderr, "%s\n", error.c_str());
+    return 1;
+  }
+  config.backend = backend;
   if (argc > 3) config.cache_dir = argv[3];
   const int runs = argc > 4 ? std::atoi(argv[4]) : 20;
   // Only a positive count overrides the Config default; garbage or 0 keeps
@@ -177,9 +130,20 @@ int main(int argc, char** argv) {
   // No backend-specific options are forced here: a driver should not silently
   // pick a power profile. Pass what the backend needs through the environment,
   // e.g. MIE_OPTIONS="library_path=/data/local/tmp/mie,skel_library_dir=..."
-  AppendEnvOptions(&config);
+  example::AppendEnvOptions(&config);
 
-  std::string error;
+  // Echo what is actually in effect — vendor delegates are opaque, and a run
+  // that "behaves differently" is often just an option that never reached it.
+  std::fprintf(stderr, "options in effect:");
+  if (config.options.empty()) {
+    std::fprintf(stderr, " (none)");
+  } else {
+    for (const auto& kv : config.options) {
+      std::fprintf(stderr, " %s=%s", kv.first.c_str(), kv.second.c_str());
+    }
+  }
+  std::fprintf(stderr, "\n");
+
   const auto create_start = std::chrono::steady_clock::now();
   std::unique_ptr<mie::Engine> engine = mie::Engine::Create(config, &error);
   const auto create_end = std::chrono::steady_clock::now();
@@ -211,7 +175,7 @@ int main(int argc, char** argv) {
                 engine->NumOutputs(), out_above.bytes);
   }
 
-  for (int j = 0; j < engine->NumInputs(); ++j) FillInput(engine->Input(j));
+  for (int j = 0; j < engine->NumInputs(); ++j) example::FillInput(engine->Input(j));
 
   // Warm up, then time the steady state. The first Run() can pay one-time
   // device costs (lazy APU power-up, first-request setup on the DLA path), so
@@ -245,13 +209,13 @@ int main(int argc, char** argv) {
   PrintOutputHead(engine->Output(0), 8);
   for (int i = 0; i < engine->NumOutputs(); ++i) {
     std::printf("out[%d] checksum: %08x\n", i,
-                TensorChecksum(engine->Output(i)));
+                example::TensorChecksum(engine->Output(i)));
   }
   // A warning rather than a failure: plenty of real models legitimately emit an
   // all-zero tensor (no detections, a zero count, ...). For a model known to
   // produce non-zero output this still catches a dead data path.
   for (int i = 0; i < engine->NumOutputs(); ++i) {
-    if (IsDegenerate(engine->Output(i))) {
+    if (example::IsDegenerate(engine->Output(i))) {
       std::fprintf(stderr,
                    "WARN: output[%d] is all zeros for a non-zero input\n", i);
     }

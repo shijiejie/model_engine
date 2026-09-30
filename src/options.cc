@@ -19,6 +19,13 @@ const std::string* FindOption(const Options& options, const char* key) {
   return nullptr;
 }
 
+void RemoveOption(Options* options, const char* key) {
+  for (auto it = options->begin(); it != options->end();) {
+    if (it->first == key) it = options->erase(it);
+    else ++it;
+  }
+}
+
 bool IsTruthy(const std::string& value) {
   return value == "true" || value == "1";
 }

@@ -258,6 +258,21 @@ if(MIE_BUILD_EXAMPLES)
       BUILD_RPATH "$ORIGIN/../third_party/rknn/lib/Linux/aarch64"
       INSTALL_RPATH "$ORIGIN/../lib")
   endif()
+
+  # Benchmark driver, arguments parsed with the single-header cmdline library
+  # (third_party/cmdline, MIT license — see the file header).
+  add_executable(mie_bench examples/bench_model.cc)
+  target_link_libraries(mie_bench PRIVATE mie)
+  target_include_directories(mie_bench PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/cmdline)
+  if(ANDROID)
+    target_link_options(mie_bench PRIVATE "-Wl,--allow-shlib-undefined")
+  endif()
+  if(MIE_ENABLE_RKNN)
+    set_target_properties(mie_bench PROPERTIES
+      BUILD_RPATH "$ORIGIN/../third_party/rknn/lib/Linux/aarch64"
+      INSTALL_RPATH "$ORIGIN/../lib")
+  endif()
 endif()
 
 include(GNUInstallDirs)
@@ -267,5 +282,5 @@ install(TARGETS mie
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 if(MIE_BUILD_EXAMPLES)
-  install(TARGETS mie_run RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(TARGETS mie_run mie_bench RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()

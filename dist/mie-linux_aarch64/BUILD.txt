@@ -1,6 +1,6 @@
 mie - linux_aarch64 (RKNN) build
 
-built     : 2026-09-29
+built     : 2026-09-30
 platform  : ARM64 Linux (aarch64-rockchip1240-linux-gnu, GCC 12.4.0)
 backend   : rknn
 optim     : release
@@ -9,15 +9,17 @@ tflite    : not built (MIE_ENABLE_TFLITE_BACKENDS=OFF)
 layout:
   include/  public headers, add -Iinclude
   lib/      libmie.a (static library) + librknnrt.so (RKNN runtime)
-  bin/      mie_run (aarch64 ELF, links librknnrt.so)
-  examples/ run_model.cc, the demo driver (built as bin/mie_run)
+  bin/      mie_run, mie_bench (aarch64 ELF, link librknnrt.so)
+  examples/ demo sources: run_model.cc (driver), bench_model.cc (benchmark,
+            parsed with the vendored cmdline.h), common.h (shared helpers)
   testdata/ demo models (ssd/detect.tflite + labelmap.txt)
   README.md full documentation
 
-Runtime note: mie_run is linked with rpath $ORIGIN/../lib, so it finds
+Runtime note: the demos are linked with rpath $ORIGIN/../lib, so they find
 librknnrt.so next to libmie.a. Keep the lib/ and bin/ directories together:
 
   cd bin && ./mie_run <model.rknn> rknn
+  cd bin && ./mie_bench <model.rknn> -b rknn -n 100
 
 This build contains ONLY the rknn backend (the TFLite cpu/gpu/qnn/mtk backends
 are excluded). The RKNN backend loads Rockchip RKNN models (.rknn) produced by

@@ -147,8 +147,20 @@ constexpr char kXnnpack[] = "xnnpack";
 constexpr char kAllowFp16[] = "allow_fp16";
 
 // ---- Qualcomm QNN (libQnnTFLiteDelegate.so) -----------------------------
-// Selects the accelerator. "htp" is the NPU and is the kQnn default.
+// Selects the accelerator. "htp" is the kQnn default.
 constexpr char kBackendType[] = "backend_type";
+
+// Generic aliases for the per-backend performance knobs. backend_qnn.cc maps
+// each onto the htp_/gpu_/dsp_-prefixed key the delegate actually reads,
+// chosen by backend_type, so MIE_OPTIONS survives switching accelerators. An
+// explicit prefixed key always wins over the generic one.
+//   performance_mode   -> value ladders differ per backend (HTP 0..9,
+//                         GPU 0..3, DSP 0..8); 1 always means "go fast"
+//   perf_ctrl_strategy -> htp/dsp only (GPU has no equivalent; warn+ignore)
+//   pd_session         -> htp: unsigned|signed; dsp also takes adaptive
+constexpr char kPerformanceMode[] = "performance_mode";
+constexpr char kPerfCtrlStrategy[] = "perf_ctrl_strategy";
+constexpr char kPdSession[] = "pd_session";
 // NUMERIC enum value only: 0=default, 1=sustained_high_performance, 2=burst,
 // 3=high_performance, 4=power_saver ... 9=extreme_power_saver.
 // WARNING: the delegate accepts nothing else. A name string such as "burst" or
@@ -165,9 +177,42 @@ constexpr char kHtpPrecision[] = "htp_precision";
 // optimal graph).
 constexpr char kHtpOptimizationStrategy[] = "htp_optimization_strategy";
 constexpr char kHtpPdSession[] = "htp_pd_session";  // "unsigned" | "signed"
+// true|false, default true. Lets the HTP use the short-conv HMX path, which is
+// faster, but convs with short depth and/or unsymmetric weights can produce
+// inaccurate results. Set "false" when output numerics drift on conv-heavy
+// graphs.
+constexpr char kHtpUseConvHmx[] = "htp_use_conv_hmx";
+// true|false, default false. Folds Relu into the preceding conv for speed.
+// Numerically correct only when the conv's quantization range equals, or is a
+// subset of, the Relu range — otherwise clamp semantics change.
+constexpr char kHtpUseFoldRelu[] = "htp_use_fold_relu";
 // Directory holding libQnnHtpV<NN>Skel.so (sets $ADSP_LIBRARY_PATH).
 constexpr char kSkelLibraryDir[] = "skel_library_dir";
-constexpr char kDeviceId[] = "device_id";  // multi-HTP SoCs
+// Multi-HTP SoCs. NOTE: the delegate's key really is "htp_device_id"; a bare
+// "device_id" is not recognized and is silently ignored.
+constexpr char kHtpDeviceId[] = "htp_device_id";
+
+// Numeric enum only: 0=user_provided, 1=fp32, 2=fp16 (default), 3=hybrid
+// (fp16 math, fp32 accumulate). Controls numerics AND speed of the Adreno
+// path; fp32 can be rejected by the GPU op-package on older OpenCL drivers
+// (GPU_ERROR_INVALID_TYPE 10012 at graph finalize). A non-numeric value
+// atoi()s to 0 (user_provided) instead of erroring, so validate before use.
+constexpr char kGpuPrecision[] = "gpu_precision";
+// Numeric enum: 0=default, 1=high, 2=normal, 3=low.
+constexpr char kGpuPerformanceMode[] = "gpu_performance_mode";
+// Directory for the GPU backend's on-disk compiled-kernel cache (kernel
+// persistence): repeated launches skip OpenCL recompilation. Defaults to
+// Config::cache_dir when backend_type=gpu and a cache_dir is set (wired up in
+// backend_qnn.cc); set this key explicitly only to override that.
+constexpr char kGpuKernelRepoDir[] = "gpu_kernel_repo_dir";
+
+// Numeric enum: 0=default, 1=sustained, 2=burst, 3=high_performance,
+// 4..8=power_saver ladder (like HTP but no 9=extreme_power_saver).
+constexpr char kDspPerformanceMode[] = "dsp_performance_mode";
+// Numeric, 0=manual (default) | 1=auto (DSP votes/releases its own perf mode).
+constexpr char kDspPerfCtrlStrategy[] = "dsp_perf_ctrl_strategy";
+// "unsigned" (default) | "signed" | "adaptive" PD session.
+constexpr char kDspPdSession[] = "dsp_pd_session";
 // Directory holding libQnnHtp*.so. Only useful when the QNN libraries are NOT
 // already reachable via LD_LIBRARY_PATH / jniLibs — setting it in that case
 // makes delegate application fail with "Restored original execution plan after

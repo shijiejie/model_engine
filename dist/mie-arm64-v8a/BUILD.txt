@@ -1,6 +1,6 @@
 mie - arm64-v8a build
 
-built     : 2026-09-30T00:12:07
+built     : 2026-09-30T23:00:00
 abi       : arm64-v8a
 platform  : android-27
 backend   : cpu, gpu, qnn, mtk, dla, qnnnative
@@ -11,12 +11,20 @@ ndk       : D:\path\to\android-ndk-r16b
 layout:
   include/  public headers, add -Iinclude
   lib/      libmie.a, link it or list the .a directly
-  bin/      mie_run plus the TFLite runtime .so it needs at runtime
+  bin/      mie_run + mie_bench plus the TFLite runtime .so they need
+  examples/ demo sources: run_model.cc (driver), bench_model.cc (benchmark,
+            parsed with the vendored cmdline.h), common.h (shared helpers)
 
-Runtime note: mie_run needs libtensorflowlite_c.so and
+Runtime note: the demos need libtensorflowlite_c.so and
 libtensorflowlite_gpu_delegate.so on LD_LIBRARY_PATH. The Android linker does
 NOT search the executable's own directory, so keep bin/ together and run:
   cd bin && LD_LIBRARY_PATH=. [ADSP_LIBRARY_PATH=<skels>] ./mie_run model.tflite qnn
+  cd bin && LD_LIBRARY_PATH=. ./mie_bench model.tflite -b qnn -n 100
+
+QNN backends additionally need the QNN delegate/backend libraries on
+LD_LIBRARY_PATH and the Hexagon skels on ADSP_LIBRARY_PATH (or pass
+MIE_OPTIONS=skel_library_dir=<dir> for the qnn delegate). Both demos print the
+full per-backend option and environment table with --help.
 
 Integration note: libmie.a is built with APP_STL=c++_static. Link it
 into an app built with APP_STL := c++_static as well - Config passes

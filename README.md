@@ -42,7 +42,13 @@ src/backend_mtk.{h,cc}          self-contained: NeuroPilot, no TFLite
 src/backend_mtk_dla.{h,cc}      self-contained: Neuron Runtime, no TFLite
 src/backend_qnn_native.{h,cc}   self-contained: QNN C API, no TFLite
 src/backend_rknn.{h,cc}         self-contained: RKNN C API, no TFLite (ARM64 Linux)
-examples/run_model.cc
+examples/run_model.cc           demo driver: per-backend latency + checksums
+examples/bench_model.cc         benchmark driver: init/cold/warmup/steady-state
+                                percentiles (p50/p90/p99) + RSS per phase
+examples/common.h               shared demo helpers (backend parsing, option help,
+                                FNV-1a checksums)
+third_party/cmdline/cmdline.h   single-header cmdline parser (MIT), used by
+                                examples/bench_model.cc
 tools/qnn_probe.cc              drives the QNN delegate's own C API (diagnostic)
 tools/dla_compile.sh            on-device .tflite -> .dla compiler front-end
 tools/dla_stale_probe.cc        detects whether the runtime honors changed inputs
@@ -136,10 +142,10 @@ It uses the committed prebuilt TFLite under `third_party/tflite-dist/`, runs
 dist/mie-arm64-v8a/
   include/mie/engine.h
   lib/libmie.a
-  bin/mie_run                     + the TFLite runtime .so it needs
+  bin/mie_run mie_bench           + the TFLite runtime .so they need
   bin/libtensorflowlite_c.so
   bin/libtensorflowlite_gpu_delegate.so
-  examples/run_model.cc
+  examples/run_model.cc bench_model.cc common.h cmdline.h
   testdata/ssd/detect.tflite + labelmap.txt
   README.md  BUILD.txt
 ```
@@ -210,7 +216,7 @@ dist/mie-windows_x86_64/
   include/mie/engine.h
   lib/mie.lib
   bin/mie_run.exe + tensorflowlite_c.dll
-  examples/run_model.cc
+  examples/run_model.cc bench_model.cc common.h cmdline.h
   testdata/ssd/detect.tflite + labelmap.txt
   README.md  BUILD.txt
 ```
@@ -240,8 +246,8 @@ layout as the other targets:
 dist/mie-linux_aarch64/
   include/mie/engine.h
   lib/libmie.a + librknnrt.so
-  bin/mie_run        (aarch64 ELF; finds librknnrt.so via $ORIGIN/../lib)
-  examples/run_model.cc
+  bin/mie_run mie_bench  (aarch64 ELF; find librknnrt.so via $ORIGIN/../lib)
+  examples/run_model.cc bench_model.cc common.h cmdline.h
   testdata/ssd/detect.tflite + labelmap.txt   (reference only; RKNN loads .rknn)
   README.md  BUILD.txt
 ```
@@ -254,6 +260,12 @@ conversion and float32 outputs). For model-native buffers, pass
 `rknn_core_mask=core0`, `core0_1`, `core0_1_2`, or `all` to select NPU cores.
 
 ## Measured on a real device
+
+Two demo drivers ship with the engine: `mie_run` runs one backend and prints
+tensor/checksum output, `mie_bench` reports init / cold-start / warm-up /
+steady-state latency (avg/min/max/p50/p90/p99/stddev) plus RSS per phase. Both
+take the same `MIE_OPTIONS` keys — run either with `--help` for the full
+per-backend option table, including the QNN environment variables.
 
 A Qualcomm device, Android 16, arm64-v8a. `add.bin` is a 544-byte toy and
 `multi_add.bin` a 4-input / 2-output toy; `detect.tflite` is a real 4.2 MB
