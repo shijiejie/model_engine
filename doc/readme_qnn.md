@@ -30,7 +30,9 @@ consumes later.
 
 On the device, with the QNN libs and HTP skels deployed (see the main README
 "Backend notes" for the deploy recipe — `ADSP_LIBRARY_PATH` must point at the
-skels or the binary will not load, pitfall 2 below):
+skels or the binary will not load, pitfall 2 below; the `qnn` delegate can set
+it for you via `MIE_OPTIONS=skel_library_dir=<dir>`, the `qnnnative` backend
+cannot):
 
 ```bash
 adb shell 'cd /data/local/tmp/mie && \
@@ -82,6 +84,9 @@ Running the same `detect_ctx/qnn_binary_*.bin`:
    misleading "must match this device's SoC" (see the main README's
    "Device-side errors are not masked" note: real cause is exposed via
    `errorGetMessage`, e.g. `error 0x36b1 (QNN_DEVICE_ERROR_INVALID_CONFIG)`).
+   The `qnn` delegate accepts `MIE_OPTIONS=skel_library_dir=<dir>` and sets
+   `ADSP_LIBRARY_PATH` itself; the `qnnnative` backend has no such option, so
+   always export `ADSP_LIBRARY_PATH` for it.
 3. **Cold compile is expensive; the cache is the point.** First init ~1329 ms
    (compile) vs. cache hit ~182 ms.
 4. **Custom NMS tails only pass via the cache.** `TFLite_Detection_PostProcess`
